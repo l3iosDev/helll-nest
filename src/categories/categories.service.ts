@@ -1,10 +1,10 @@
-import { CategoryResponse } from './interfaces/category-response.interface';
+import { UpdateCategoryInput } from './dto/update-category.input';
 import { EntityRepository, wrap } from '@mikro-orm/core';
-import { InjectRepository } from '@mikro-orm/nestjs';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { MyResponse } from 'src/shared/interfaces/response.interface';
-import { CategoryDto } from './dto/category.dto';
+import { CreateCategoryInput } from './dto/create-category.input';
 import { Category } from './entities/categories.entities';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
+import { InjectRepository } from '@mikro-orm/nestjs';
 
 @Injectable()
 export class CategoriesService {
@@ -12,76 +12,49 @@ export class CategoriesService {
     @InjectRepository(Category)
     private readonly categoryRepository: EntityRepository<Category>,
   ) {}
-  async findAll(): Promise<MyResponse> {
+
+  async findAll(): Promise<Category[]> {
     const categories = await this.categoryRepository.findAll({
       orderBy: { id: 'DESC' },
     });
-
-    const response = categories.map((category) =>
-      this.buildCategoryResponse(category),
-    );
-
-    return { success: true, data: response };
+    return categories;
   }
 
-  async findOne(categoryId: number): Promise<{
-    id: number;
-    name: string;
-    createdAt: Date;
-  }> {
-    const { updatedAt, ...rest } = await this.findCategoryById(categoryId);
-    return rest;
+  findOne(categoryId: number): Promise<Category> {
+    return this.findCategoryById(categoryId);
   }
 
-  async create(categoryDto: CategoryDto): Promise<Category> {
-    const data = new Category(categoryDto.name);
-    const category = this.categoryRepository.create(data);
-    await this.categoryRepository.persistAndFlush(category);
-    return data;
+  async create(createCategoryInput: CreateCategoryInput): Promise<Category> {
+    try {
+      let category = new Category(
+        createCategoryInput.name,
+        createCategoryInput.image,
+      );
+      category = this.categoryRepository.create(category);
+      //  Entity Manager (Persist data)
+      // await this.categoryRepository.persistAndFlush(category);
+      await this.categoryRepository.flush();
+      return category;
+    } catch (err) {
+      throw new ConflictException();
+    }
   }
 
-  async update(
-    categoryId: number,
-    categoryDto: CategoryDto,
-  ): Promise<Category> {
-    const category = await this.findCategoryById(categoryId);
-
-    wrap(category).assign({
-      name: categoryDto.name,
-    });
-
+  async update(updateCategoryInput: UpdateCategoryInput): Promise<Category> {
+    const category = await this.findCategoryById(updateCategoryInput.id);
+    wrap(category).assign({ name: updateCategoryInput.name });
+    //  Entity Manager (Find diff and update)
     await this.categoryRepository.flush();
-
     return category;
-  }
-
-  async delete(categoryId: number): Promise<MyResponse> {
-    const category = await this.findCategoryById(categoryId);
-
-    await this.categoryRepository.removeAndFlush(category);
-
-    return {
-      success: true,
-      data: null,
-    };
   }
 
   private async findCategoryById(categoryId: number): Promise<Category> {
     const category = await this.categoryRepository.findOne({ id: categoryId });
 
     if (!category) {
-      throw new HttpException(
-        { success: false, error: 'category not found' } as MyResponse,
-        HttpStatus.NOT_FOUND,
-      );
+      throw new NotFoundException();
     }
-    return category;
-  }
 
-  private buildCategoryResponse(category: Category): CategoryResponse {
-    return {
-      id: category.id,
-      name: category.name,
-    };
+    return category;
   }
 }

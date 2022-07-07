@@ -1,12 +1,11 @@
+import { Category } from './entities/categories.entities';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { Module } from '@nestjs/common';
-import { CategoriesController } from './categories.controller';
+import { CategoriesResolver } from './categories.resolver';
 import { CategoriesService } from './categories.service';
-import { Category } from './entities/categories.entities';
 
 @Module({
   imports: [MikroOrmModule.forFeature([Category])],
-  controllers: [CategoriesController],
-  providers: [CategoriesService],
+  providers: [CategoriesResolver, CategoriesService],
 })
 export class CategoriesModule {}
